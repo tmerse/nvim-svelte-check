@@ -19,7 +19,7 @@ require('lazy').setup({
     {
         'StephenGunn/sveltecheck.nvim',
         config = function()
-            require('svelte-check').setup({
+            require('sveltecheck').setup({
                 command = "pnpm run check", -- Default command for pnpm
             })
         end,
@@ -38,7 +38,7 @@ return require('packer').startup(function(use)
     use {
         'StephenGunn/sveltecheck.nvim',
         config = function()
-            require('svelte-check').setup({
+            require('sveltecheck').setup({
                 command = "pnpm run check", -- Default command for pnpm
             })
         end
@@ -81,7 +81,7 @@ require('lazy').setup({
     {
         'StephenGunn/sveltecheck.nvim',
         config = function()
-            require('svelte-check').setup({
+            require('sveltecheck').setup({
                 command = "npm run svelte-check",
             })
         end,
@@ -96,7 +96,7 @@ return require('packer').startup(function(use)
     use {
         'StephenGunn/sveltecheck.nvim',
         config = function()
-            require('svelte-check').setup({
+            require('sveltecheck').setup({
                 command = "npm run svelte-check",
             })
         end
