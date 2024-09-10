@@ -70,7 +70,7 @@ Customize the plugin by passing configuration options to the `setup` function. T
 require('svelte-check').setup({
     command = "npm run svelte-check", -- Custom command for npm, defaults to pnpm
     spinner_frames = { "⣾", "⣽", "⣻", "⢿", "⡿", "⣟", "⣯", "⣷" }, -- default spinner frames
-    debug_mode = false, -- will print debug messages if true
+    debug_mode = false, -- will print debug messages if true (fault is false)
 })
 ```
 
