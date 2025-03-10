@@ -1,10 +1,14 @@
-# sveltecheck.nvim
+# nvim-svelte-check
 
 A Neovim plugin that runs `svelte-check` asynchronously, displays a spinner while running, and populates the quickfix list with the results.
 
 https://github.com/StephenGunn/sveltecheck.nvim/assets/7240548/99c3549e-2c54-4c1a-ab70-16d463e3e4ad
 
 Inspired by [dmmulroy/tsc.nvim](https://github.com/dmmulroy/tsc.nvim)
+
+## ⚠️ Important: Module Renamed in v2.0.0
+
+The module has been renamed from `sveltecheck` to `svelte-check`. See the [Migration Guide](MIGRATION.md) for details.
 
 ## Installation
 
@@ -17,9 +21,9 @@ Inspired by [dmmulroy/tsc.nvim](https://github.com/dmmulroy/tsc.nvim)
 -- lazy.nvim plugin configuration
 require('lazy').setup({
     {
-        'StephenGunn/sveltecheck.nvim',
+        'nvim-svelte/nvim-svelte-check',
         config = function()
-            require('sveltecheck').setup({
+            require('svelte-check').setup({
                 command = "pnpm run check", -- Default command for pnpm
             })
         end,
@@ -36,9 +40,9 @@ require('lazy').setup({
 -- packer.nvim plugin configuration
 return require('packer').startup(function(use)
     use {
-        'StephenGunn/sveltecheck.nvim',
+        'nvim-svelte/nvim-svelte-check',
         config = function()
-            require('sveltecheck').setup({
+            require('svelte-check').setup({
                 command = "pnpm run check", -- Default command for pnpm
             })
         end
@@ -60,50 +64,39 @@ This command will start the `svelte-check` process, display a spinner, and popul
 
 ## Customization
 
-Customize the plugin by passing configuration options to the `setup` function. The available option is:
+Customize the plugin by passing configuration options to the `setup` function:
 
 - `command` (string): The command to run `svelte-check` (default: `"pnpm run check"`).
+- `spinner_frames` (table): Frames for the spinner animation (default: `{ "⣾", "⣽", "⣻", "⢿", "⡿", "⣟", "⣯", "⣷" }`)
+- `debug_mode` (boolean): Enable debug logging for troubleshooting (default: `false`)
 
 ### Example Customization
 
 ```lua
 require('svelte-check').setup({
     command = "npm run svelte-check", -- Custom command for npm, defaults to pnpm
-    spinner_frames = { "⣾", "⣽", "⣻", "⢿", "⡿", "⣟", "⣯", "⣷" }, -- default spinner frames
-    debug_mode = false, -- will print debug messages if true (fault is false)
+    spinner_frames = { "⣾", "⣽", "⣻", "⢿", "⡿", "⣟", "⣯", "⣷" }, -- spinner frames
+    debug_mode = false, -- will print debug messages if true (default is false)
 })
 ```
 
-### Using with `lazy.nvim` and `packer.nvim`
+## Troubleshooting
 
-**`lazy.nvim` Customization Example:**
+If the plugin isn't correctly detecting errors or warnings:
 
-```lua
-require('lazy').setup({
-    {
-        'StephenGunn/sveltecheck.nvim',
-        config = function()
-            require('sveltecheck').setup({
-                command = "npm run svelte-check",
-            })
-        end,
-    },
-})
-```
+1. Try enabling debug mode to see detailed logging:
 
-**`packer.nvim` Customization Example:**
+   ```lua
+   require('svelte-check').setup({
+       command = "npm run check",
+       debug_mode = true
+   })
+   ```
 
-```lua
-return require('packer').startup(function(use)
-    use {
-        'StephenGunn/sveltecheck.nvim',
-        config = function()
-            require('sveltecheck').setup({
-                command = "npm run svelte-check",
-            })
-        end
-    }
+2. Verify that your project's `svelte-check` command works correctly in the terminal
+3. Make sure the command in your config matches the exact script name in package.json
+4. Check if your project uses a custom output format for svelte-check that might not be compatible with the plugin
 
-    -- Add other plugins as needed
-end)
-```
+## License
+
+This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.

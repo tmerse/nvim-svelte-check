@@ -1,198 +1,22 @@
+-- Compatibility layer for v1.x to v2.x migration
+-- do not edit, just leave as is and we will eventually delete
 local M = {}
 
-local default_config = {
-  command = "pnpm run check",
-  spinner_frames = { "⣾", "⣽", "⣻", "⢿", "⡿", "⣟", "⣯", "⣷" },
-  debug_mode = false,
-}
+vim.notify_once(
+	"Warning: The 'sveltecheck' module has been renamed to 'svelte-check'. Please update your config. See https://github.com/nvim-svelte/nvim-svelte-check for migration guide.",
+	vim.log.levels.WARN
+)
 
-local config = vim.deepcopy(default_config)
-local spinner_index = 1
-local spinner_timer = nil
-local summary_info = "No errors or warnings found... nice!"
-
-local silent_print = function(msg)
-  vim.api.nvim_echo({ { msg, "Normal" } }, false, {})
-end
-
--- Helper function to find the project root
-local function find_project_root()
-  local current_dir = vim.fn.getcwd()
-  while current_dir ~= "/" do
-    if vim.fn.glob(current_dir .. "/package.json") ~= "" then
-      return current_dir
-    end
-    current_dir = vim.fn.fnamemodify(current_dir, ":h") -- Move up one directory
-  end
-  return nil
-end
-
-local function start_spinner()
-  if spinner_timer then
-    spinner_timer:stop()
-  end
-
-  spinner_timer = vim.defer_fn(function()
-    silent_print("Running Svelte Check... " .. config.spinner_frames[spinner_index])
-    spinner_index = (spinner_index % #config.spinner_frames) + 1
-    start_spinner()
-  end, 100)
-end
-
-local function stop_spinner()
-  if spinner_timer then
-    spinner_timer:stop()
-    spinner_timer:close()
-    spinner_timer = nil
-  end
-  vim.o.statusline = ""
-  vim.cmd("redrawstatus")
-end
-
-M.run = function()
-  start_spinner()
-
-  -- Find the project root directory
-  local project_root = find_project_root()
-  if not project_root then
-    print("Could not find project root with package.json. Running in the current directory.")
-    project_root = vim.fn.getcwd() -- Fallback to the current directory
-  end
-
-  if config.debug_mode then
-    print("Running command in directory: " .. project_root)
-  end
-
-  local function on_output(_, data, event)
-    local svelte_check_output = table.concat(data, "\n")
-    local lines = vim.split(svelte_check_output, "\n")
-
-    if config.debug_mode then
-      print("Output: " .. svelte_check_output)
-      print("Event: " .. event)
-      print("Lines: " .. #lines)
-    end
-
-    local quickfix_list = {}
-    local last_line = nil
-
-    for _, line in ipairs(lines) do
-      if config.debug_mode then
-        print("Processing line: " .. line)
-      end
-
-      local timestamp = line:match("^%d+")
-
-      if timestamp then
-        if line:match("COMPLETED") then
-          if config.debug_mode then
-            print("Found COMPLETED line: " .. line)
-          end
-          last_line = line
-        end
-
-        local error_type, file_path, line_number, column_number, description =
-            line:match('^%d+%s+(%a+)%s+"(.-)"%s+(%d+):(%d+)%s+"(.-)"')
-
-        if config.debug_mode then
-          print("Timestamp: " .. timestamp)
-          print("Error Type: " .. (error_type or "nil"))
-          print("File Path: " .. (file_path or "nil"))
-          print("Line Number: " .. (line_number or "nil"))
-          print("Column Number: " .. (column_number or "nil"))
-          print("Description: " .. (description or "nil"))
-        end
-
-        if error_type and file_path and line_number and column_number and description then
-          line_number = tonumber(line_number)
-          column_number = tonumber(column_number)
-
-          table.insert(quickfix_list, {
-            filename = file_path,
-            lnum = line_number,
-            col = column_number,
-            text = description,
-            type = error_type,
-            nr = 0,
-            valid = true,
-          })
-        else
-          if config.debug_mode then
-            print("Incomplete match for line: " .. line)
-          end
-        end
-      else
-        if config.debug_mode then
-          print("Skipped non-epoch line: " .. line)
-        end
-      end
-    end
-
-    if last_line then
-      local stats_pattern =
-      "^%d+%s+COMPLETED%s+(%d+)%s+FILES%s+(%d+)%s+ERRORS%s+(%d+)%s+WARNINGS%s+(%d+)%s+FILES_WITH_PROBLEMS"
-      local files, errors, warnings, files_with_problems = last_line:match(stats_pattern)
-
-      if config.debug_mode then
-        print("Stats Pattern: " .. stats_pattern)
-        print("Files: " .. (files or "nil"))
-        print("Errors: " .. (errors or "nil"))
-        print("Warnings: " .. (warnings or "nil"))
-        print("Files with Problems: " .. (files_with_problems or "nil"))
-      end
-
-      if files and errors and warnings and files_with_problems then
-        summary_info = "Svelte Check completed with "
-            .. errors
-            .. " errors and "
-            .. warnings
-            .. " warnings in "
-            .. files
-            .. " files."
-      else
-        if config.debug_mode then
-          print("Could not extract all stats from COMPLETED line: " .. last_line)
-        end
-      end
-    end
-
-    if #quickfix_list > 0 then
-      vim.fn.setqflist({}, "r", { title = "Svelte Check", items = quickfix_list })
-      vim.cmd("copen")
-    end
-  end
-
-  local final_command = config.command .. " --output machine"
-
-  local job_id = vim.fn.jobstart(final_command, {
-    cwd = project_root, -- Run the command in the project root directory
-    stdout_buffered = true,
-    stderr_buffered = true,
-    on_stdout = function(_, data)
-      on_output(_, data, "stdout")
-    end,
-    on_exit = function(_, exit_code)
-      stop_spinner()
-
-      print(summary_info)
-
-      if exit_code > 1 then
-        print("Svelte Check failed with exit code " .. exit_code)
-      end
-    end,
-  })
-
-  vim.fn.jobwait({ job_id }, 1000)
-end
-
-function M.setup(user_config)
-  if user_config then
-    config = vim.tbl_deep_extend("force", config, user_config)
-  end
-
-  vim.api.nvim_create_user_command("SvelteCheck", function()
-    M.run()
-  end, { desc = "Run `svelte-check` asynchronously and load the results into a qflist", force = true })
-end
+-- Forward all calls to the new module
+setmetatable(M, {
+	__index = function(_, key)
+		local ok, module = pcall(require, "svelte-check")
+		if ok and module then
+			return module[key]
+		end
+		-- Fallback in case the new module isn't available
+		return nil
+	end,
+})
 
 return M
