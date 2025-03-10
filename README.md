@@ -2,7 +2,7 @@
 
 A Neovim plugin that runs `svelte-check` asynchronously, displays a spinner while running, and populates the quickfix list with the results.
 
-https://github.com/StephenGunn/sveltecheck.nvim/assets/7240548/99c3549e-2c54-4c1a-ab70-16d463e3e4ad
+https://github.com/user-attachments/assets/570747cf-7016-4e35-a85e-00fa050a63a7
 
 Inspired by [dmmulroy/tsc.nvim](https://github.com/dmmulroy/tsc.nvim)
 
