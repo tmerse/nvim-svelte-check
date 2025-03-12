@@ -193,10 +193,7 @@ M.run = function()
 	end
 
 	-- To:
-	local final_command = config.command .. " --output machine"
-	if config.debug_mode then
-		print("About to run command: " .. final_command)
-	end
+	local final_command = '"' .. config.command .. ' --output machine"'
 
 	if config.debug_mode then
 		print("Running command: " .. final_command)
