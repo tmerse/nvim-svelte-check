@@ -192,7 +192,11 @@ M.run = function()
 		print("Running command in directory: " .. project_root)
 	end
 
+	-- To:
 	local final_command = config.command .. " --output machine"
+	if config.debug_mode then
+		print("About to run command: " .. final_command)
+	end
 
 	if config.debug_mode then
 		print("Running command: " .. final_command)
@@ -200,7 +204,7 @@ M.run = function()
 
 	local job_id = vim.fn.jobstart(final_command, {
 		cwd = project_root, -- Run the command in the project root directory
-		stdout_buffered = false, -- Process output line by line
+		shell = true, -- Add this line to use shell execution
 		stderr_buffered = false,
 		on_stdout = function(_, data)
 			if data and #data > 0 then
