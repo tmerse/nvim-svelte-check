@@ -78,8 +78,10 @@ local function process_output()
 	-- Always print the number of lines collected regardless of debug mode
 	print("Processing " .. #collected_output .. " lines of svelte-check output")
 
-	if config.debug_mode then
-		print("Debug: Detailed processing of collected output")
+	-- Always print the first few lines to help debugging
+	print("First few lines of collected output:")
+	for i = 1, math.min(5, #collected_output) do
+		print(string.format("[%d] %s", i, collected_output[i]))
 	end
 
 	local quickfix_list = {}
@@ -88,16 +90,10 @@ local function process_output()
 	local file_count = 0
 
 	for i, line in ipairs(collected_output) do
-		if config.debug_mode then
-			print("Processing line " .. i .. ": " .. line)
-		end
-
 		-- First check if this is a valid machine format output line
 		local timestamp = line:match("^%d+")
 		if not timestamp then
-			if config.debug_mode then
-				print("Skipped non-epoch line: " .. line)
-			end
+			-- Skip non-timestamp lines
 			goto continue
 		end
 
@@ -116,37 +112,62 @@ local function process_output()
 				error_count = e
 				warning_count = w
 
-				if config.debug_mode then
-					print(
-						"Found stats: "
-							.. file_count
-							.. " files, "
-							.. error_count
-							.. " errors, "
-							.. warning_count
-							.. " warnings"
-					)
-				end
+				print(
+					"Found stats: "
+						.. file_count
+						.. " files, "
+						.. error_count
+						.. " errors, "
+						.. warning_count
+						.. " warnings"
+				)
 			else
-				if config.debug_mode then
-					print("Could not extract all stats from COMPLETED line: " .. line)
-				end
+				print("Could not extract all stats from COMPLETED line: " .. line)
 			end
 			goto continue
 		end
 
-		-- Check for errors and warnings - fixed pattern for svelte-check machine format
+		-- Check for errors and warnings using multiple approaches
 		if line:match("ERROR") or line:match("WARNING") then
-			-- Format example: 1744219831987 ERROR "src/routes/file.svelte" 45:21 "Error message."
+			print("Processing potential error/warning line: " .. line)
+
+			-- Try different patterns
+
+			-- Pattern 1: Standard quotes format
 			local error_type, file_path, line_col, description =
 				line:match('^%d+%s+(%a+)%s+"([^"]+)"%s+(%d+:%d+)%s+"(.-)"')
 
 			if error_type and file_path and line_col and description then
+				print("Pattern 1 matched!")
+			else
+				print("Pattern 1 did not match, trying pattern 2...")
+				-- Pattern 2: Without quotes around description
+				error_type, file_path, line_col, description = line:match('^%d+%s+(%a+)%s+"([^"]+)"%s+(%d+:%d+)%s+(.*)')
+			end
+
+			if not (error_type and file_path and line_col) then
+				print("Pattern 2 did not match, trying pattern 3...")
+				-- Pattern 3: More permissive
+				error_type, file_path, line_col, description = line:match('(%a+)%s+"([^"]+)"%s+(%d+:%d+)')
+
+				if error_type and file_path and line_col then
+					description = line:match(line_col .. "%s+(.+)$") or "Unknown error"
+				end
+			end
+
+			if error_type and file_path and line_col then
 				local line_number, column_number = line_col:match("(%d+):(%d+)")
 
 				if line_number and column_number then
 					local lnum = tonumber(line_number) or 0
 					local col = tonumber(column_number) or 0
+
+					-- Clean up description if needed
+					if description then
+						description = description:gsub('^"', ""):gsub('"$', "")
+					else
+						description = "Unknown error"
+					end
 
 					table.insert(quickfix_list, {
 						filename = file_path,
@@ -158,58 +179,50 @@ local function process_output()
 						valid = true,
 					})
 
-					if config.debug_mode then
-						print(
-							"Added quickfix entry: "
-								.. error_type
-								.. " in "
-								.. file_path
-								.. " at "
-								.. lnum
-								.. ":"
-								.. col
-						)
-					end
+					print("Added quickfix entry: " .. error_type .. " in " .. file_path .. " at " .. lnum .. ":" .. col)
 				else
-					if config.debug_mode then
-						print("Failed to parse line:col from: " .. line_col)
-					end
+					print("Failed to parse line:col from: " .. line_col)
 				end
 			else
-				if config.debug_mode then
-					print("No match found with primary pattern for line: " .. line)
-				end
+				print("No pattern matched for line: " .. line)
 
-				-- Try alternate pattern without quotes around the message
-				error_type, file_path, line_col, description = line:match('^%d+%s+(%a+)%s+"([^"]+)"%s+(%d+:%d+)%s+(.*)')
-
-				if error_type and file_path and line_col and description then
-					local line_number, column_number = line_col:match("(%d+):(%d+)")
-
-					if line_number and column_number then
-						local lnum = tonumber(line_number) or 0
-						local col = tonumber(column_number) or 0
-
-						-- Remove quotes if they exist
-						description = description:gsub('^"', ""):gsub('"$', "")
-
-						table.insert(quickfix_list, {
-							filename = file_path,
-							lnum = lnum,
-							col = col,
-							text = description,
-							type = error_type:sub(1, 1),
-							nr = 0,
-							valid = true,
-						})
-
-						if config.debug_mode then
-							print("Added quickfix entry (alt pattern): " .. error_type .. " in " .. file_path)
-						end
+				-- Extra fallback for typical svelte-check format
+				if line:match("ERROR") or line:match("WARNING") then
+					local parts = {}
+					for part in line:gmatch("%S+") do
+						table.insert(parts, part)
 					end
-				else
-					if config.debug_mode then
-						print("No match found with alternate pattern for line: " .. line)
+
+					if #parts >= 4 then
+						-- Expected format might be: TIMESTAMP ERROR "FILE" LINE:COL "MESSAGE"
+						local error_type = parts[2]
+						local file_path = parts[3]:gsub('^"', ""):gsub('"$', "")
+						local line_col = parts[4]
+
+						if line_col:match("%d+:%d+") then
+							local line_number, column_number = line_col:match("(%d+):(%d+)")
+							local lnum = tonumber(line_number) or 0
+							local col = tonumber(column_number) or 0
+
+							-- Reconstruct message from remaining parts
+							local msg = ""
+							for i = 5, #parts do
+								msg = msg .. " " .. parts[i]
+							end
+							msg = msg:gsub('^%s+"', ""):gsub('"$', "")
+
+							table.insert(quickfix_list, {
+								filename = file_path,
+								lnum = lnum,
+								col = col,
+								text = msg or "Unknown error",
+								type = error_type:sub(1, 1),
+								nr = 0,
+								valid = true,
+							})
+
+							print("Added quickfix entry using fallback: " .. error_type .. " in " .. file_path)
+						end
 					end
 				end
 			end
@@ -245,6 +258,8 @@ local function process_output()
 		summary_info = "No errors or warnings found... nice!"
 	end
 
+	print("Found " .. #quickfix_list .. " issues to add to quickfix list")
+
 	if #quickfix_list > 0 then
 		vim.fn.setqflist({}, "r", { title = "Svelte Check", items = quickfix_list })
 		vim.cmd("copen")
@@ -267,43 +282,10 @@ M.run = function()
 		project_root = vim.fn.getcwd() -- Fallback to the current directory
 	end
 
-	-- If debug mode is on, test if the command is available
-	if config.debug_mode then
-		local test_cmd = "cd " .. vim.fn.shellescape(project_root) .. " && " .. config.command .. " --help"
-		print("Testing command: " .. test_cmd)
-		local sys_output = vim.fn.system(test_cmd)
-		local sys_exit_code = vim.v.shell_error
-		print("Test command exit code: " .. sys_exit_code)
-		if sys_output then
-			print("Test command output sample: " .. string.sub(sys_output, 1, 100))
-		end
-	end
-
-	if config.debug_mode then
-		print("Running command in directory: " .. project_root)
-	end
-
-	-- Use an array for command arguments to avoid shell parsing issues
-	local cmd_parts = vim.split(config.command, " ")
-	local final_command = cmd_parts[1]
-	local cmd_args = {}
-	for i = 2, #cmd_parts do
-		table.insert(cmd_args, cmd_parts[i])
-	end
-	table.insert(cmd_args, "--output")
-	table.insert(cmd_args, "machine")
-
-	if config.debug_mode then
-		print("Command parts:", vim.inspect(cmd_parts))
-		print("Final command:", final_command)
-		print("Command args:", vim.inspect(cmd_args))
-	end
+	print("Running svelte-check in: " .. project_root)
 
 	local final_command_str = config.command .. " --output machine"
-
-	if config.debug_mode then
-		print("Running command string: " .. final_command_str)
-	end
+	print("Running command: " .. final_command_str)
 
 	-- Use jobstart with proper shell settings
 	local job_id = vim.fn.jobstart(final_command_str, {
@@ -316,9 +298,6 @@ M.run = function()
 				for _, line in ipairs(data) do
 					if line and line ~= "" then
 						table.insert(collected_output, line)
-						if config.debug_mode then
-							print("Received output: " .. line)
-						end
 					end
 				end
 			end
@@ -345,32 +324,22 @@ M.run = function()
 		end,
 		on_exit = function(_, exit_code)
 			stop_spinner()
-
+			print("svelte-check completed with exit code: " .. exit_code)
 			local has_errors = process_output()
 
 			print(summary_info)
 
 			-- Exit code 1 is expected when errors are found
 			if exit_code == 1 and has_errors then
-			-- Normal behavior: command found errors (exit code 1) and we parsed them correctly
+				-- Normal behavior: command found errors (exit code 1) and we parsed them correctly
+				print("Successfully parsed errors/warnings")
 			elseif exit_code > 1 then
 				print("Svelte Check failed with exit code " .. exit_code)
-				if not config.debug_mode then
-					-- Automatically save raw output on failure when debug is off
-					save_raw_output()
-				end
+				save_raw_output()
 			elseif exit_code == 1 and not has_errors then
 				print(
 					"Svelte Check exited with code 1 but no errors were captured. This might indicate a parsing issue."
 				)
-				if not config.debug_mode then
-					-- Save raw output when we get exit code 1 but no errors parsed
-					save_raw_output()
-					print("Try running with debug_mode = true to see more details")
-				end
-			end
-
-			if config.debug_mode then
 				save_raw_output()
 			end
 		end,
@@ -421,9 +390,7 @@ function M.setup(user_config)
 		end
 
 		if found_command and found_command ~= config.command then
-			if config.debug_mode then
-				print("Automatically selecting svelte-check command: " .. found_command)
-			end
+			print("Automatically selecting svelte-check command: " .. found_command)
 			config.command = found_command
 		end
 	end
