@@ -84,6 +84,7 @@ Customize the plugin by passing configuration options to the `setup` function:
 - `command` (string): The command to run `svelte-check` (default: `"pnpm run check"`).
 - `spinner_frames` (table): Frames for the spinner animation (default: `{ "⣾", "⣽", "⣻", "⢿", "⡿", "⣟", "⣯", "⣷" }`)
 - `debug_mode` (boolean): Enable debug logging for troubleshooting (default: `false`)
+- `use_trouble_qflist` (boolean): Use [Trouble.nvim](https://github.com/folke/trouble.nvim) to display the quickfix list instead of the built-in quickfix (default: `false`)
 
 ### Example Customization
 
@@ -92,6 +93,7 @@ require('svelte-check').setup({
     command = "npm run svelte-check", -- Custom command for npm, defaults to pnpm
     spinner_frames = { "⣾", "⣽", "⣻", "⢿", "⡿", "⣟", "⣯", "⣷" }, -- spinner frames
     debug_mode = false, -- will print debug messages if true (default is false)
+    use_trouble_qflist = true, -- use Trouble.nvim for quickfix list (default is false)
 })
 ```
 

@@ -4,6 +4,7 @@ local default_config = {
   command = "pnpm run check",
   spinner_frames = { "⣾", "⣽", "⣻", "⢿", "⡿", "⣟", "⣯", "⣷" },
   debug_mode = false,
+  use_trouble_qflist = false,
 }
 
 local config = vim.deepcopy(default_config)
@@ -12,8 +13,43 @@ local spinner_timer = nil
 local summary_info = "No errors or warnings found... nice!" -- Fixed the escape issue
 local collected_output = {}
 
+-- Try to load Trouble plugin
+local trouble = nil
+pcall(function()
+  trouble = require("trouble")
+end)
+
 local silent_print = function(msg)
   vim.api.nvim_echo({ { msg, "Normal" } }, false, {})
+end
+
+local function open_qflist()
+  if config.use_trouble_qflist and trouble ~= nil then
+    trouble.open("quickfix")
+  else
+    vim.cmd("copen")
+  end
+end
+
+local function close_qflist()
+  if config.use_trouble_qflist and trouble ~= nil then
+    trouble.close()
+  else
+    vim.cmd("cclose")
+  end
+end
+
+local function set_qflist(items, title)
+  vim.fn.setqflist({}, "r", { title = title or "Svelte Check", items = items })
+  
+  if #items > 0 then
+    open_qflist()
+  else
+    -- If using trouble, refresh it when list is empty
+    if config.use_trouble_qflist and trouble ~= nil then
+      trouble.refresh()
+    end
+  end
 end
 
 -- Helper function to find the project root
@@ -239,8 +275,7 @@ local function process_output()
   debug_print("Found " .. #quickfix_list .. " issues to add to quickfix list")
 
   if #quickfix_list > 0 then
-    vim.fn.setqflist({}, "r", { title = "Svelte Check", items = quickfix_list })
-    vim.cmd("copen")
+    set_qflist(quickfix_list, "Svelte Check")
 
     if not config.debug_mode then
       -- In non-debug mode, just print the summary
@@ -249,7 +284,7 @@ local function process_output()
       print("Opened quickfix list with " .. #quickfix_list .. " issues")
     end
   else
-    vim.fn.setqflist({}, "r", { title = "Svelte Check", items = {} })
+    set_qflist({}, "Svelte Check")
     print(summary_info)
   end
 
